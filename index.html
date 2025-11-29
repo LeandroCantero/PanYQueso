@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pan y Queso - Team Generator</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Google Fonts: Space Grotesk for UI, Permanent Marker for Handwriting/Notes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Permanent+Marker&family=Space+Grotesk:wght@400;500;700&display=swap"
+    rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Space Grotesk"', 'sans-serif'],
+            hand: ['"Permanent Marker"', 'cursive'],
+          },
+          colors: {
+            neo: {
+              yellow: '#ffde59',
+              magenta: '#ff90e8',
+              green: '#88cc00',
+              blue: '#54a0ff',
+              red: '#ff6b6b',
+              white: '#ffffff',
+              black: '#000000',
+            }
+          },
+          boxShadow: {
+            'neo': '4px 4px 0px 0px #000000',
+            'neo-sm': '2px 2px 0px 0px #000000',
+            'neo-lg': '8px 8px 0px 0px #000000',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    body {
+      background-color: #f0f0f0;
+      background-image: radial-gradient(#000 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+  </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
+    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1"
+  }
+}
+</script>
+  <link rel="stylesheet" href="/index.css">
+</head>
+
+<body>
+  <div id="root"></div>
+  <script type="module" src="/src/index.tsx"></script>
+</body>
+
+</html>
