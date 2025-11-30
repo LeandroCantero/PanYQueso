@@ -2,8 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Player, Position, PositionLabels, PositionColors } from '../types';
 
 interface FieldViewProps {
-  teamA: Player[]; // Left Team (Pan)
-  teamB: Player[]; // Right Team (Queso)
+  teamA: Player[]; // Left/Top Team (Pan)
+  teamB: Player[]; // Right/Bottom Team (Queso)
   teamAColor?: string;
   teamATextColor?: string;
   teamBColor?: string;
@@ -22,121 +22,174 @@ export const FieldView: React.FC<FieldViewProps> = ({
 }) => {
   const fieldRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
   const [localPlayers, setLocalPlayers] = useState<Array<Player & { team: 'A' | 'B', currentLeft?: string, currentTop?: string }>>([]);
+  const [isVertical, setIsVertical] = useState(false);
 
-  // Initialize local state when props change, but only if not dragging
+  // Detect Mobile/Vertical Layout
+  useEffect(() => {
+    const checkLayout = () => {
+      setIsVertical(window.innerWidth < 768); // md breakpoint
+    };
+
+    checkLayout();
+    window.addEventListener('resize', checkLayout);
+    return () => window.removeEventListener('resize', checkLayout);
+  }, []);
+
+  // Initialize local state when props or layout change
   useEffect(() => {
     if (!draggingId) {
-      const situatedTeamA = processTeam(teamA, true);
-      const situatedTeamB = processTeam(teamB, false);
+      const situatedTeamA = processTeam(teamA, true, isVertical);
+      const situatedTeamB = processTeam(teamB, false, isVertical);
       setLocalPlayers([
         ...situatedTeamA.map(p => ({ ...p, team: 'A' as const })),
         ...situatedTeamB.map(p => ({ ...p, team: 'B' as const }))
       ]);
     }
-  }, [teamA, teamB, draggingId]);
+  }, [teamA, teamB, draggingId, isVertical]);
 
-  // Helper to calculate position on a HORIZONTAL pitch
-  const getPositionStyle = (player: Player, index: number, totalInRole: number, isLeftTeam: boolean) => {
-    let top = '50%';
-    let left = '50%';
+  // Helper to calculate position
+  const getPositionStyle = (player: Player, index: number, totalInRole: number, isLeftTeam: boolean, vertical: boolean) => {
+    // Default center
+    let posPrimary = '50%'; // The axis of the field length (X in horiz, Y in vert)
+    let posSecondary = '50%'; // The axis of distribution (Y in horiz, X in vert)
 
-    // Vertical distribution (Top to Bottom) within the role column
-    top = `${((index + 1) / (totalInRole + 1)) * 100}%`;
+    // Distribution within the role line
+    posSecondary = `${((index + 1) / (totalInRole + 1)) * 100}%`;
 
-    if (isLeftTeam) {
-      // Left Half (0% to 50% width)
-      switch (player.position) {
-        case Position.GK: left = '6%'; break;
-        case Position.DEF: left = '18%'; break;
-        case Position.MID: left = '32%'; break;
-        case Position.FWD: left = '45%'; break;
+    if (vertical) {
+      // VERTICAL: Primary is Y (Top), Secondary is X (Left)
+      if (isLeftTeam) {
+        // Top Team (Team A)
+        switch (player.position) {
+          case Position.GK: posPrimary = '8%'; break;
+          case Position.DEF: posPrimary = '20%'; break;
+          case Position.MID: posPrimary = '32%'; break;
+          case Position.FWD: posPrimary = '42%'; break;
+        }
+      } else {
+        // Bottom Team (Team B)
+        switch (player.position) {
+          case Position.FWD: posPrimary = '58%'; break;
+          case Position.MID: posPrimary = '68%'; break;
+          case Position.DEF: posPrimary = '80%'; break;
+          case Position.GK: posPrimary = '92%'; break;
+        }
       }
+      return { top: posPrimary, left: posSecondary };
     } else {
-      // Right Half (50% to 100% width)
-      switch (player.position) {
-        case Position.FWD: left = '55%'; break;
-        case Position.MID: left = '68%'; break;
-        case Position.DEF: left = '82%'; break;
-        case Position.GK: left = '94%'; break;
+      // HORIZONTAL: Primary is X (Left), Secondary is Y (Top)
+      if (isLeftTeam) {
+        // Left Team
+        switch (player.position) {
+          case Position.GK: posPrimary = '6%'; break;
+          case Position.DEF: posPrimary = '18%'; break;
+          case Position.MID: posPrimary = '30%'; break;
+          case Position.FWD: posPrimary = '42%'; break;
+        }
+      } else {
+        // Right Team
+        switch (player.position) {
+          case Position.FWD: posPrimary = '58%'; break;
+          case Position.MID: posPrimary = '70%'; break;
+          case Position.DEF: posPrimary = '82%'; break;
+          case Position.GK: posPrimary = '94%'; break;
+        }
       }
+      return { top: posSecondary, left: posPrimary };
     }
-
-    return { top, left };
   };
 
-  const processTeam = (players: Player[], isLeftTeam: boolean) => {
+  const processTeam = (players: Player[], isLeftTeam: boolean, vertical: boolean) => {
     const grouped = players.reduce((acc, p) => {
       acc[p.position] = (acc[p.position] || []).concat(p);
       return acc;
     }, {} as Record<Position, Player[]>);
 
     return players.map(p => {
-      // If player has saved coordinates, use them. Otherwise calculate formation.
-      if (p.x !== undefined && p.y !== undefined) {
-        return { ...p, coords: { left: `${p.x}%`, top: `${p.y}%` } };
-      }
+      // If player has saved coordinates, use them. 
+      // NOTE: Saved coords are likely in % relative to the view they were saved in.
+      // If we switch views, we might want to re-calculate or transform them.
+      // For now, if we switch orientation, we force re-calculation to avoid players jumping to weird spots.
+      // Ideally, we'd store "logical" positions (e.g. "GK") and calculate render coords.
+      // But since we support drag-and-drop, we have explicit coords.
+      // A simple heuristic: if we have explicit coords, we try to respect them, 
+      // BUT if the aspect ratio flips, those % might look wrong.
+      // Let's just re-calculate standard formation on orientation change for now to keep it clean.
 
       const roleGroup = grouped[p.position];
       const indexInRole = roleGroup.indexOf(p);
-      const coords = getPositionStyle(p, indexInRole, roleGroup.length, isLeftTeam);
+      const coords = getPositionStyle(p, indexInRole, roleGroup.length, isLeftTeam, vertical);
       return { ...p, coords };
     });
   };
 
-  const handleMouseDown = (e: React.MouseEvent, player: Player) => {
-    if (!onPlayerUpdate) return;
-    e.preventDefault();
-    setDraggingId(player.id);
+  // --- Dragging Logic (Shared) ---
 
-    // Calculate offset to keep cursor relative to token center
-    // For simplicity, we'll center the token on the cursor for now or just track delta
-    // But since we are mapping to zones, exact pixel offset matters less than the zone drop
+  const startDrag = (id: string) => {
+    if (!onPlayerUpdate) return;
+    setDraggingId(id);
   };
 
-  const handleMouseMove = (e: React.MouseEvent) => {
+  const moveDrag = (clientX: number, clientY: number) => {
     if (!draggingId || !fieldRef.current) return;
 
     const rect = fieldRef.current.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
 
     // Constrain to field
-    let xPercent = (x / rect.width) * 100;
-    const yPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
+    let xPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    let yPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
 
     // Update local visual state
     setLocalPlayers(prev => prev.map(p => {
       if (p.id === draggingId) {
-        // Determine new position based on X zone
         let newPos = p.position;
         const isTeamA = p.team === 'A';
 
-        // Constrain X to team half
-        if (isTeamA) {
-          xPercent = Math.max(0, Math.min(50, xPercent));
-        } else {
-          xPercent = Math.max(50, Math.min(100, xPercent));
-        }
+        if (isVertical) {
+          // VERTICAL LOGIC
+          // Constrain Y to team half
+          if (isTeamA) {
+            yPercent = Math.max(0, Math.min(50, yPercent));
+            // Zones (Top to Bottom) - Thresholds: 14, 26, 38
+            if (yPercent < 14) newPos = Position.GK;
+            else if (yPercent < 26) newPos = Position.DEF;
+            else if (yPercent < 38) newPos = Position.MID;
+            else if (yPercent < 50) newPos = Position.FWD;
+          } else {
+            yPercent = Math.max(50, Math.min(100, yPercent));
+            // Zones (Top to Bottom) - Thresholds: 62, 74, 86
+            if (yPercent > 86) newPos = Position.GK;
+            else if (yPercent > 74) newPos = Position.DEF;
+            else if (yPercent > 62) newPos = Position.MID;
+            else if (yPercent > 50) newPos = Position.FWD;
+          }
 
-        // Zone thresholds
-        if (isTeamA) {
-          if (xPercent < 12) newPos = Position.GK;
-          else if (xPercent < 25) newPos = Position.DEF;
-          else if (xPercent < 40) newPos = Position.MID;
-          else if (xPercent < 50) newPos = Position.FWD;
-          // Don't allow crossing to other team's side for now (or maybe just clamp)
         } else {
-          if (xPercent > 88) newPos = Position.GK;
-          else if (xPercent > 75) newPos = Position.DEF;
-          else if (xPercent > 60) newPos = Position.MID;
-          else if (xPercent > 50) newPos = Position.FWD;
+          // HORIZONTAL LOGIC
+          // Constrain X to team half
+          if (isTeamA) {
+            xPercent = Math.max(0, Math.min(50, xPercent));
+            // Zones (Left to Right)
+            if (xPercent < 12) newPos = Position.GK;
+            else if (xPercent < 25) newPos = Position.DEF;
+            else if (xPercent < 40) newPos = Position.MID;
+            else if (xPercent < 50) newPos = Position.FWD;
+          } else {
+            xPercent = Math.max(50, Math.min(100, xPercent));
+            // Zones (Left to Right)
+            if (xPercent > 88) newPos = Position.GK;
+            else if (xPercent > 75) newPos = Position.DEF;
+            else if (xPercent > 60) newPos = Position.MID;
+            else if (xPercent > 50) newPos = Position.FWD;
+          }
         }
 
         return {
           ...p,
-          position: newPos, // Update position label live
+          position: newPos,
           currentLeft: `${xPercent}%`,
           currentTop: `${yPercent}%`
         };
@@ -145,7 +198,7 @@ export const FieldView: React.FC<FieldViewProps> = ({
     }));
   };
 
-  const handleMouseUp = () => {
+  const endDrag = () => {
     if (!draggingId) return;
 
     const player = localPlayers.find(p => p.id === draggingId);
@@ -154,7 +207,7 @@ export const FieldView: React.FC<FieldViewProps> = ({
         id: player.id,
         name: player.name,
         stars: player.stars,
-        position: player.position, // This is the new position calculated in MouseMove
+        position: player.position,
         x: parseFloat((player.currentLeft || player.coords?.left || '0').replace('%', '')),
         y: parseFloat((player.currentTop || player.coords?.top || '0').replace('%', ''))
       });
@@ -162,29 +215,85 @@ export const FieldView: React.FC<FieldViewProps> = ({
     setDraggingId(null);
   };
 
+  // --- Mouse Handlers ---
+  const handleMouseDown = (e: React.MouseEvent, player: Player) => {
+    e.preventDefault();
+    startDrag(player.id);
+  };
+  const handleMouseMove = (e: React.MouseEvent) => {
+    moveDrag(e.clientX, e.clientY);
+  };
+  const handleMouseUp = () => {
+    endDrag();
+  };
+
+  // --- Touch Handlers ---
+  const handleTouchStart = (e: React.TouchEvent, player: Player) => {
+    // Prevent default to stop scrolling immediately when touching a player token
+    if (e.cancelable) e.preventDefault();
+    startDrag(player.id);
+  };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (draggingId) {
+      // Prevent scrolling while dragging
+      if (e.cancelable) e.preventDefault();
+      const touch = e.touches[0];
+      moveDrag(touch.clientX, touch.clientY);
+    }
+  };
+  const handleTouchEnd = () => {
+    endDrag();
+  };
+
+
   return (
     <div
       id="field-canvas"
       ref={fieldRef}
-      className="relative w-full aspect-[1.6] min-h-[450px] bg-neo-green border-4 border-neo-black shadow-neo-lg overflow-hidden mb-4 rounded-lg select-none"
+      className={`relative w-full bg-neo-green border-4 border-neo-black shadow-neo-lg overflow-hidden mb-4 rounded-lg select-none transition-all duration-500 ${isVertical ? 'aspect-[0.6] min-h-[600px]' : 'aspect-[1.6] min-h-[450px]'}`}
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={handleMouseUp}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchEnd}
     >
 
-      {/* --- Horizontal Field Markings --- */}
+      {/* --- Field Markings --- */}
       <div className="absolute inset-4 border-4 border-white opacity-50 pointer-events-none"></div>
-      <div className="absolute left-1/2 top-4 bottom-4 w-1 bg-white opacity-50 -translate-x-1/2 pointer-events-none"></div>
+
+      {/* Center Line */}
+      <div className={`absolute bg-white opacity-50 pointer-events-none ${isVertical ? 'top-1/2 left-4 right-4 h-1 -translate-y-1/2' : 'left-1/2 top-4 bottom-4 w-1 -translate-x-1/2'}`}></div>
+
+      {/* Center Circle */}
       <div className="absolute top-1/2 left-1/2 w-32 h-32 border-4 border-white rounded-full -translate-x-1/2 -translate-y-1/2 opacity-50 pointer-events-none"></div>
       <div className="absolute top-1/2 left-1/2 w-4 h-4 bg-white rounded-full -translate-x-1/2 -translate-y-1/2 opacity-50 pointer-events-none"></div>
-      <div className="absolute top-1/2 left-4 -translate-y-1/2 h-1/2 w-32 border-4 border-l-0 border-white opacity-50 pointer-events-none"></div>
-      <div className="absolute top-1/2 left-4 -translate-y-1/2 h-1/4 w-12 border-4 border-l-0 border-white opacity-50 pointer-events-none"></div>
-      <div className="absolute top-1/2 right-4 -translate-y-1/2 h-1/2 w-32 border-4 border-r-0 border-white opacity-50 pointer-events-none"></div>
-      <div className="absolute top-1/2 right-4 -translate-y-1/2 h-1/4 w-12 border-4 border-r-0 border-white opacity-50 pointer-events-none"></div>
+
+      {/* Areas (Boxes) */}
+      {isVertical ? (
+        <>
+          {/* Top Area */}
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-1/2 h-32 border-4 border-t-0 border-white opacity-50 pointer-events-none"></div>
+          <div className="absolute top-4 left-1/2 -translate-x-1/2 w-1/4 h-12 border-4 border-t-0 border-white opacity-50 pointer-events-none"></div>
+
+          {/* Bottom Area */}
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-1/2 h-32 border-4 border-b-0 border-white opacity-50 pointer-events-none"></div>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-1/4 h-12 border-4 border-b-0 border-white opacity-50 pointer-events-none"></div>
+        </>
+      ) : (
+        <>
+          {/* Left Area */}
+          <div className="absolute top-1/2 left-4 -translate-y-1/2 h-1/2 w-32 border-4 border-l-0 border-white opacity-50 pointer-events-none"></div>
+          <div className="absolute top-1/2 left-4 -translate-y-1/2 h-1/4 w-12 border-4 border-l-0 border-white opacity-50 pointer-events-none"></div>
+
+          {/* Right Area */}
+          <div className="absolute top-1/2 right-4 -translate-y-1/2 h-1/2 w-32 border-4 border-r-0 border-white opacity-50 pointer-events-none"></div>
+          <div className="absolute top-1/2 right-4 -translate-y-1/2 h-1/4 w-12 border-4 border-r-0 border-white opacity-50 pointer-events-none"></div>
+        </>
+      )}
 
       {/* --- Players --- */}
       {localPlayers.map((p) => {
-        // If dragging, use currentLeft/Top, else use calculated coords
         const top = (p.id === draggingId && p.currentTop) ? p.currentTop : (p.coords?.top || '50%');
         const left = (p.id === draggingId && p.currentLeft) ? p.currentLeft : (p.coords?.left || '50%');
         const isDragging = p.id === draggingId;
@@ -193,17 +302,18 @@ export const FieldView: React.FC<FieldViewProps> = ({
           <div
             key={p.id}
             onMouseDown={(e) => handleMouseDown(e, p)}
-            className={`absolute flex flex-col items-center justify-center z-10 w-20 cursor-grab active:cursor-grabbing ${!isDragging ? 'transition-all duration-700 ease-out' : ''}`}
+            onTouchStart={(e) => handleTouchStart(e, p)}
+            className={`absolute flex flex-col items-center justify-center z-10 w-12 md:w-20 cursor-grab active:cursor-grabbing touch-none ${!isDragging ? 'transition-all duration-700 ease-out' : ''}`}
             style={{ top, left, transform: 'translate(-50%, -50%)', zIndex: isDragging ? 50 : 10 }}
           >
             {/* Token with Position */}
-            <div className={`w-12 h-12 rounded-full border-4 border-black flex items-center justify-center font-black text-xs ${p.team === 'A' ? teamAColor : teamBColor} ${p.team === 'A' ? teamATextColor : teamBTextColor} shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-20`}>
+            <div className={`w-10 h-10 md:w-16 md:h-16 rounded-full border-4 border-black flex items-center justify-center font-black text-[10px] md:text-sm ${p.team === 'A' ? teamAColor : teamBColor} ${p.team === 'A' ? teamATextColor : teamBTextColor} shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-20`}>
               {PositionLabels[p.position]}
             </div>
 
             {/* Name Label */}
-            <div className={`mt-1 border-2 border-black px-2 py-1 rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] max-w-[120px] z-10 flex items-center justify-center ${p.team === 'A' ? teamAColor : teamBColor}`}>
-              <span className={`text-xs font-bold whitespace-nowrap uppercase tracking-tight ${p.team === 'A' ? teamATextColor : teamBTextColor}`}>
+            <div className={`mt-1 border-2 border-black px-1 py-0.5 md:px-2 md:py-1 rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] max-w-[85px] md:max-w-[120px] z-10 flex items-center justify-center ${p.team === 'A' ? teamAColor : teamBColor}`}>
+              <span className={`text-[10px] md:text-sm font-bold whitespace-nowrap uppercase tracking-tight ${p.team === 'A' ? teamATextColor : teamBTextColor}`}>
                 {p.name}
               </span>
             </div>

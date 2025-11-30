@@ -53,7 +53,7 @@ export const CompactTeamHeader: React.FC<CompactTeamHeaderProps> = ({
             {/* Palette Toggle */}
             <button
                 onClick={() => setShowPalette(!showPalette)}
-                className={`absolute left-2 top-2 p-2 z-20 rounded hover:bg-black/10 ${textColor} opacity-0 group-hover:opacity-100 transition-opacity`}
+                className={`absolute left-2 top-2 p-2 z-20 rounded hover:bg-black/10 ${textColor} opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity`}
                 title="Cambiar colores"
             >
                 <Palette size={16} />
@@ -116,7 +116,7 @@ export const CompactTeamHeader: React.FC<CompactTeamHeaderProps> = ({
 
                 <button
                     onClick={() => isEditing ? handleSave() : setIsEditing(true)}
-                    className={`absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-black/10 rounded ${textColor} opacity-0 group-hover:opacity-100 transition-opacity`}
+                    className={`absolute right-0 top-1/2 -translate-y-1/2 p-1 hover:bg-black/10 rounded ${textColor} opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity`}
                     title={isEditing ? "Guardar" : "Editar nombre"}
                 >
                     {isEditing ? <Check size={16} /> : <Pencil size={16} />}

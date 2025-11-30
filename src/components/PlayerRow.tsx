@@ -77,7 +77,7 @@ export const PlayerRow: React.FC<PlayerRowProps> = ({ player, onUpdate }) => {
                 </div>
                 <button
                     onClick={() => setIsEditing(true)}
-                    className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
+                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
                     title="Editar"
                 >
                     <Pencil size={14} className="text-black" />
