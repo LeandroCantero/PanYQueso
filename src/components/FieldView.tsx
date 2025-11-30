@@ -4,10 +4,22 @@ import { Player, Position, PositionLabels, PositionColors } from '../types';
 interface FieldViewProps {
   teamA: Player[]; // Left Team (Pan)
   teamB: Player[]; // Right Team (Queso)
+  teamAColor?: string;
+  teamATextColor?: string;
+  teamBColor?: string;
+  teamBTextColor?: string;
   onPlayerUpdate?: (player: Player) => void;
 }
 
-export const FieldView: React.FC<FieldViewProps> = ({ teamA, teamB, onPlayerUpdate }) => {
+export const FieldView: React.FC<FieldViewProps> = ({
+  teamA,
+  teamB,
+  teamAColor = 'bg-neo-red',
+  teamATextColor = 'text-black',
+  teamBColor = 'bg-neo-blue',
+  teamBTextColor = 'text-white',
+  onPlayerUpdate
+}) => {
   const fieldRef = useRef<HTMLDivElement>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
@@ -61,6 +73,11 @@ export const FieldView: React.FC<FieldViewProps> = ({ teamA, teamB, onPlayerUpda
     }, {} as Record<Position, Player[]>);
 
     return players.map(p => {
+      // If player has saved coordinates, use them. Otherwise calculate formation.
+      if (p.x !== undefined && p.y !== undefined) {
+        return { ...p, coords: { left: `${p.x}%`, top: `${p.y}%` } };
+      }
+
       const roleGroup = grouped[p.position];
       const indexInRole = roleGroup.indexOf(p);
       const coords = getPositionStyle(p, indexInRole, roleGroup.length, isLeftTeam);
@@ -86,7 +103,7 @@ export const FieldView: React.FC<FieldViewProps> = ({ teamA, teamB, onPlayerUpda
     const y = e.clientY - rect.top;
 
     // Constrain to field
-    const xPercent = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    let xPercent = (x / rect.width) * 100;
     const yPercent = Math.max(0, Math.min(100, (y / rect.height) * 100));
 
     // Update local visual state
@@ -95,6 +112,13 @@ export const FieldView: React.FC<FieldViewProps> = ({ teamA, teamB, onPlayerUpda
         // Determine new position based on X zone
         let newPos = p.position;
         const isTeamA = p.team === 'A';
+
+        // Constrain X to team half
+        if (isTeamA) {
+          xPercent = Math.max(0, Math.min(50, xPercent));
+        } else {
+          xPercent = Math.max(50, Math.min(100, xPercent));
+        }
 
         // Zone thresholds
         if (isTeamA) {
@@ -130,7 +154,9 @@ export const FieldView: React.FC<FieldViewProps> = ({ teamA, teamB, onPlayerUpda
         id: player.id,
         name: player.name,
         stars: player.stars,
-        position: player.position // This is the new position calculated in MouseMove
+        position: player.position, // This is the new position calculated in MouseMove
+        x: parseFloat((player.currentLeft || player.coords?.left || '0').replace('%', '')),
+        y: parseFloat((player.currentTop || player.coords?.top || '0').replace('%', ''))
       });
     }
     setDraggingId(null);
@@ -171,13 +197,13 @@ export const FieldView: React.FC<FieldViewProps> = ({ teamA, teamB, onPlayerUpda
             style={{ top, left, transform: 'translate(-50%, -50%)', zIndex: isDragging ? 50 : 10 }}
           >
             {/* Token with Position */}
-            <div className={`w-12 h-12 rounded-full border-4 border-black flex items-center justify-center font-black text-xs ${PositionColors[p.position]} text-neo-black shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-20`}>
+            <div className={`w-12 h-12 rounded-full border-4 border-black flex items-center justify-center font-black text-xs ${p.team === 'A' ? teamAColor : teamBColor} ${p.team === 'A' ? teamATextColor : teamBTextColor} shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] z-20`}>
               {PositionLabels[p.position]}
             </div>
 
             {/* Name Label */}
-            <div className={`mt-1 border-2 border-black px-2 py-0.5 rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] max-w-full z-10 ${p.team === 'A' ? 'bg-neo-yellow' : 'bg-neo-blue'}`}>
-              <span className="text-xs font-bold text-neo-black whitespace-nowrap overflow-hidden text-ellipsis block text-center uppercase tracking-tight">
+            <div className={`mt-1 border-2 border-black px-2 py-1 rounded shadow-[2px_2px_0px_0px_rgba(0,0,0,1)] max-w-[120px] z-10 flex items-center justify-center ${p.team === 'A' ? teamAColor : teamBColor}`}>
+              <span className={`text-xs font-bold whitespace-nowrap uppercase tracking-tight ${p.team === 'A' ? teamATextColor : teamBTextColor}`}>
                 {p.name}
               </span>
             </div>

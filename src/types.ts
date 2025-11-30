@@ -10,6 +10,8 @@ export interface Player {
   name: string;
   position: Position;
   stars: number; // 1-5
+  x?: number; // 0-100%
+  y?: number; // 0-100%
 }
 
 export interface Team {
@@ -28,7 +30,7 @@ export interface MatchResult {
 export const PositionColors: Record<Position, string> = {
   [Position.GK]: 'bg-neo-yellow',
   [Position.DEF]: 'bg-neo-blue',
-  [Position.MID]: 'bg-neo-green',
+  [Position.MID]: 'bg-neo-darkGreen',
   [Position.FWD]: 'bg-neo-red',
 };
 

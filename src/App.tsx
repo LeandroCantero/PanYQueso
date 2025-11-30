@@ -3,10 +3,25 @@ import { Player, Position, MatchResult, PositionColors, Team, PositionLabels } f
 import { Button } from './components/Button';
 import { PlayerCard } from './components/PlayerCard';
 import { generateBalancedTeams } from './services/teamService';
-import { Star, Share2, Users, Layout, Activity, RotateCcw, Download, Copy, Trash2, Image as ImageIcon, MessageCircle } from 'lucide-react';
+import { Star, Share2, Users, Layout, Activity, RotateCcw, Download, Copy, Trash2, ImageIcon, MessageCircle, Pencil, Pin } from 'lucide-react';
+import { TeamListView } from './components/TeamListView';
+import { CompactTeamHeader } from './components/CompactTeamHeader';
 import { FieldView } from './components/FieldView';
 import { Modal } from './components/Modal';
-import html2canvas from 'html2canvas';
+import { toCanvas } from 'html-to-image';
+import toast, { Toaster } from 'react-hot-toast';
+import { ConfirmModal } from './components/ConfirmModal';
+
+// ... (existing imports)
+
+// ... inside App component ...
+
+
+
+
+
+
+
 
 const App = () => {
   // --- State ---
@@ -23,10 +38,17 @@ const App = () => {
   // Modals
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   // Local state for editable team names to persist between views
   const [teamAName, setTeamAName] = useState("Equipo Pan");
   const [teamBName, setTeamBName] = useState("Equipo Queso");
+
+  // Team Colors State
+  const [teamAColor, setTeamAColor] = useState("bg-neo-red");
+  const [teamATextColor, setTeamATextColor] = useState("text-black");
+  const [teamBColor, setTeamBColor] = useState("bg-neo-blue");
+  const [teamBTextColor, setTeamBTextColor] = useState("text-white");
 
   // Reset names when new result comes in
   useEffect(() => {
@@ -91,30 +113,45 @@ const App = () => {
 
   const handleGenerate = async () => {
     if (players.length < 2) {
-      alert("¡Necesitás al menos 2 jugadores para armar partido!");
+      toast.error("¡Necesitás al menos 2 jugadores para armar partido!", {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+      });
       return;
     }
     setLoading(true);
     try {
       // Add a small artificial delay for UX
       await new Promise(resolve => setTimeout(resolve, 800));
-      const data = await generateBalancedTeams(players);
+
+      // Clean players coordinates to reset positions on field
+      const cleanPlayers = players.map(({ x, y, ...p }) => p);
+      const data = await generateBalancedTeams(cleanPlayers);
       setResult(data);
+      toast.success("¡Equipos armados!", {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold', background: '#88cc00', color: '#000' }
+      });
     } catch (e) {
       console.error(e);
-      alert("Error al armar los equipos.");
+      toast.error("Error al armar los equipos.", {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+      });
     } finally {
       setLoading(false);
     }
   };
 
   const handleReset = () => {
-    if (window.confirm("¿Estás seguro que querés borrar todo y empezar de cero?")) {
-      setPlayers([]);
-      setResult(null);
-      setTeamAName("Equipo Pan");
-      setTeamBName("Equipo Queso");
-    }
+    setShowResetConfirm(true);
+  };
+
+  const confirmReset = () => {
+    setPlayers([]);
+    setResult(null);
+    setTeamAName("Equipo Pan");
+    setTeamBName("Equipo Queso");
+    toast.success("Todo reseteado.", {
+      style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+    });
   };
 
   const handlePlayerUpdate = (updatedPlayer: Player) => {
@@ -149,23 +186,29 @@ const App = () => {
   const captureField = async (): Promise<HTMLCanvasElement | null> => {
     const element = document.getElementById('field-canvas');
     if (!element) {
-      alert("Cambiá a la vista de 'CANCHAS' para poder capturar la imagen.");
+      toast("Cambiá a la vista de 'CANCHAS' para poder capturar la imagen.", {
+        icon: 'ℹ️',
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+      });
       return null;
     }
     try {
-      // Use html2canvas to screenshot the div
-      const canvas = await html2canvas(element, {
-        scale: 3, // Increased scale for better quality
-        useCORS: true,
-        backgroundColor: null // Transparent background if possible, or keep default
+      // Use html-to-image to generate canvas
+      const canvas = await toCanvas(element, {
+        pixelRatio: 3, // High quality
+        backgroundColor: '#88cc00', // Match neo-green field color
+        cacheBust: true,
       });
       return canvas;
     } catch (err) {
       console.error(err);
-      alert("No se pudo generar la imagen. Asegurate de que la librería cargó correctamente.");
+      toast.error("No se pudo generar la imagen.", {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+      });
       return null;
     }
   };
+
 
   // Helper to allow async awaiting of clipboard write
   const copyCanvasToClipboard = (canvas: HTMLCanvasElement): Promise<void> => {
@@ -208,11 +251,15 @@ const App = () => {
 
     try {
       await copyCanvasToClipboard(canvas);
-      alert("¡Cancha copiada al portapapeles!");
+      toast.success("¡Cancha copiada al portapapeles!", {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold', background: '#54a0ff', color: '#000' }
+      });
       setShowDownloadModal(false);
     } catch (err) {
       console.error(err);
-      alert("Error al copiar: " + err);
+      toast.error("Error al copiar: " + err, {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+      });
     }
   };
 
@@ -245,13 +292,21 @@ const App = () => {
       const url = `https://wa.me/?text=${encodeURIComponent(text)}`;
 
       // 4. Alert user and open
-      alert("¡IMAGEN COPIADA!\n\nSe abrirá WhatsApp.\n\n1. Seleccioná el chat.\n2. Pegá la imagen (Ctrl+V) en el cuadro de texto.");
-      window.open(url, '_blank');
-      setShowShareModal(false);
+      toast("¡IMAGEN COPIADA!\n\nSe abrirá WhatsApp.\n\n1. Seleccioná el chat.\n2. Pegá la imagen (Ctrl+V).", {
+        duration: 6000,
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold', background: '#ffde59', color: '#000' }
+      });
+
+      setTimeout(() => {
+        window.open(url, '_blank');
+        setShowShareModal(false);
+      }, 1500);
 
     } catch (err) {
       console.error(err);
-      alert("No se pudo copiar la imagen al portapapeles automáticamente.\n\nPrueba 'DESCARGAR' la imagen primero y enviarla manualmente.");
+      toast.error("No se pudo copiar la imagen automáticamente.", {
+        style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold' }
+      });
     }
   };
 
@@ -273,57 +328,22 @@ const App = () => {
     </div>
   );
 
-  const CompactTeamHeader = ({
-    name,
-    setName,
-    color,
-    avg
-  }: { name: string, setName: (s: string) => void, color: string, avg: number }) => (
-    <div className={`border-4 border-neo-black shadow-neo-sm p-3 ${color} mb-4 relative`}>
-      <input
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        className="w-full bg-transparent font-black text-xl uppercase outline-none placeholder-neo-black text-black text-center"
-      />
-      <div className="text-sm font-bold opacity-80 text-black text-center mt-1 border-t-2 border-black/20 pt-1">
-        Promedio: {avg} ⭐
-      </div>
-    </div>
-  );
 
-  const TeamListView = ({ team, onEdit }: { team: Team, onEdit: (p: Player) => void }) => (
-    <div className={`flex-1 border-4 border-neo-black shadow-neo p-4 bg-white min-h-[400px]`}>
-      <ul className="space-y-2">
-        {team.players.map(p => (
-          <li key={p.id} className="flex items-center justify-between border-b-2 border-gray-200 pb-1 group">
-            <span className="font-bold flex items-center gap-2 text-black">
-              <span className={`w-8 h-6 flex items-center justify-center text-[10px] border border-black ${PositionColors[p.position]} text-black`}>
-                {PositionLabels[p.position]}
-              </span>
-              {p.name}
-            </span>
-            <div className="flex items-center gap-2">
-              <div className="flex">
-                {Array.from({ length: p.stars }).map((_, i) => <Star key={i} size={12} fill="black" color="black" />)}
-              </div>
-              <button
-                onClick={() => onEdit(p)}
-                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-200 rounded transition-opacity"
-                title="Editar"
-              >
-                <Users size={14} className="text-black" />
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
+
+
+
+
 
   return (
-    <div className="min-h-screen p-4 md:p-8 font-sans max-w-7xl mx-auto">
+    <div className="min-h-screen p-4 md:p-8 font-sans max-w-7xl mx-auto relative">
+      <Toaster position="top-right" reverseOrder={false} />
+      <img
+        src="/Logo2.png"
+        alt="Logo Pan y Queso"
+        className="absolute top-4 left-4 md:left-8 w-20 md:w-32 h-auto object-contain z-10"
+      />
       <header className="mb-8 text-center">
-        <h1 className="text-5xl md:text-7xl font-black uppercase tracking-tighter drop-shadow-[4px_4px_0_#000] text-black">
+        <h1 className="text-5xl md:text-7xl font-hand uppercase tracking-tighter drop-shadow-[4px_4px_0_#000] text-white">
           Pan y Queso
         </h1>
         <p className="font-bold text-xl mt-2 bg-neo-yellow inline-block px-2 border-2 border-black shadow-[4px_4px_0_#000] text-black">
@@ -350,7 +370,7 @@ const App = () => {
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   onKeyDown={handleKeyDown}
-                  className="w-full border-4 border-neo-black bg-neo-black p-3 font-bold focus:outline-none focus:ring-4 ring-neo-yellow transition-all text-white placeholder-gray-500"
+                  className="w-full border-4 border-neo-black bg-gray-100 p-3 font-bold focus:outline-none focus:ring-4 ring-neo-yellow transition-all text-black placeholder-gray-500"
                   placeholder="Ej. Messi"
                 />
               </div>
@@ -405,7 +425,7 @@ const App = () => {
                 <label className="block font-bold mb-1 text-black">Habilidad</label>
                 <div
                   ref={starsRef}
-                  className="outline-none inline-block focus:ring-4 focus:ring-neo-blue rounded-lg p-1 transition-all"
+                  className="outline-none inline-block focus-visible:bg-gray-100 rounded-lg p-1 transition-all"
                   tabIndex={0}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter') {
@@ -476,14 +496,20 @@ const App = () => {
               <CompactTeamHeader
                 name={teamAName}
                 setName={setTeamAName}
-                color="bg-neo-yellow"
+                backgroundColor={teamAColor}
+                textColor={teamATextColor}
                 avg={result.teamA.averageSkill}
+                onColorChange={setTeamAColor}
+                onTextColorChange={setTeamATextColor}
               />
               <CompactTeamHeader
                 name={teamBName}
                 setName={setTeamBName}
-                color="bg-neo-blue"
+                backgroundColor={teamBColor}
+                textColor={teamBTextColor}
                 avg={result.teamB.averageSkill}
+                onColorChange={setTeamBColor}
+                onTextColorChange={setTeamBTextColor}
               />
             </div>
           )}
@@ -574,24 +600,28 @@ const App = () => {
                     <FieldView
                       teamA={result.teamA.players}
                       teamB={result.teamB.players}
+                      teamAColor={teamAColor}
+                      teamATextColor={teamATextColor}
+                      teamBColor={teamBColor}
+                      teamBTextColor={teamBTextColor}
                       onPlayerUpdate={handlePlayerUpdate}
                     />
                   </div>
 
                   {viewMode === 'list' && (
                     <div className="flex flex-col md:flex-row gap-4 mb-2">
-                      <TeamListView team={result.teamA} onEdit={handleEdit} />
+                      <TeamListView team={result.teamA} onUpdate={handlePlayerUpdate} />
                       <div className="flex items-center justify-center font-black text-4xl text-black self-center">VS</div>
-                      <TeamListView team={result.teamB} onEdit={handleEdit} />
+                      <TeamListView team={result.teamB} onUpdate={handlePlayerUpdate} />
                     </div>
                   )}
 
                   {/* Analysis Sticky Note */}
                   <div className="relative bg-[#fff740] p-6 shadow-lg rotate-1 max-w-2xl mx-auto border border-black mt-6">
-                    <div className="absolute -top-4 left-1/2 -translate-x-1/2 w-8 h-8 rounded-full bg-red-500 border-2 border-black shadow-sm z-10"></div>
-                    <h3 className="font-hand text-2xl mb-2 font-bold underline decoration-wavy text-black">Tips:</h3>
+                    <Pin className="absolute -top-3 left-1/2 text-black fill-red-500 drop-shadow-[2px_2px_0_rgba(0,0,0,1)]" size={40} style={{ transform: 'translate(-50%, 0) rotate(-30deg)' }} />
+                    <h3 className="font-hand text-2xl mb-2 font-bold underline decoration-wavy text-black">Análisis táctico:</h3>
                     <p className="font-hand text-lg leading-relaxed text-black">
-                      ¡Equipos listos! Si no te convencen, podés tocar "ARMAR DE NUEVO" para probar otra combinación.
+                      Los equipos están balanceados perfectamente, el "{teamAName}" con {result.teamA.averageSkill} estrellas y el "{teamBName}" con {result.teamB.averageSkill} estrellas.
                     </p>
                   </div>
                 </div>
@@ -608,7 +638,7 @@ const App = () => {
                               <span className={`text-[10px] font-bold px-1 border border-gray-400 rounded ${PositionColors[p.position]} text-black flex-shrink-0`}>{PositionLabels[p.position]}</span>
                               <span className="font-bold text-gray-700 truncate text-sm">{p.name}</span>
                             </div>
-                            <button onClick={() => handleEdit(p)} className="text-blue-500 hover:text-blue-700 flex-shrink-0"><Users size={14} /></button>
+                            <button onClick={() => handleEdit(p)} className="text-blue-500 hover:text-blue-700 flex-shrink-0"><Pencil size={14} /></button>
                           </div>
                         ))}
                       </div>
@@ -628,7 +658,7 @@ const App = () => {
                         <div key={p.id} className="bg-white border-2 border-gray-300 px-3 py-1 rounded-full flex items-center gap-2 shadow-sm">
                           <span className={`text-[10px] font-bold px-1 border border-gray-400 rounded ${PositionColors[p.position]} text-black`}>{PositionLabels[p.position]}</span>
                           <span className="font-bold text-gray-700">{p.name}</span>
-                          <button onClick={() => handleEdit(p)} className="text-blue-500 hover:text-blue-700"><Users size={12} /></button>
+                          <button onClick={() => handleEdit(p)} className="text-blue-500 hover:text-blue-700"><Pencil size={12} /></button>
                         </div>
                       ))}
                     </div>
@@ -702,6 +732,15 @@ const App = () => {
           </button>
         </div>
       </Modal>
+
+      <ConfirmModal
+        isOpen={showResetConfirm}
+        onClose={() => setShowResetConfirm(false)}
+        onConfirm={confirmReset}
+        title="¿RESET TOTAL?"
+        message="¿Estás seguro que querés borrar todo y empezar de cero? No hay vuelta atrás."
+        confirmText="SÍ, BORRAR TODO"
+      />
 
     </div>
   );
