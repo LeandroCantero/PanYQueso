@@ -342,6 +342,18 @@ const App = () => {
         alt="Logo Pan y Queso"
         className="block mx-auto mb-4 md:absolute md:top-4 md:left-8 md:mb-0 w-20 md:w-32 h-auto object-contain z-10"
       />
+      <a
+        href="https://dopartis.com"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="hidden md:block absolute top-10 right-8 z-10 hover:scale-105 transition-transform"
+      >
+        <img
+          src="/hecho%20por%20blanco.png"
+          alt="Hecho por Blanco"
+          className="w-24 md:w-32 h-auto object-contain"
+        />
+      </a>
       <header className="mb-8 text-center">
         <h1 className="text-5xl md:text-7xl font-hand uppercase tracking-tighter drop-shadow-[4px_4px_0_#000] text-white">
           Pan y Queso
