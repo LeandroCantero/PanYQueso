@@ -5,13 +5,21 @@ export enum Position {
   FWD = 'FWD'
 }
 
+export type SkillMode = 'basic' | 'advanced';
+
 export interface Player {
   id: string;
   name: string;
   position: Position;
-  stars: number; // 1-5
+  stars: number; // 1-5 (modo basic)
+  physical?: number; // 1-5 (modo advanced)
+  skill?: number; // 1-5 (modo advanced)
   x?: number; // 0-100%
   y?: number; // 0-100%
+}
+
+export interface AppState {
+  skillMode: SkillMode;
 }
 
 export interface Team {

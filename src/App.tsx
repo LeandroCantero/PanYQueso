@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Player, Position, MatchResult, PositionColors, Team, PositionLabels } from './types';
+import { Player, Position, MatchResult, PositionColors, Team, PositionLabels, SkillMode } from './types';
 import { Button } from './components/Button';
 import { PlayerCard } from './components/PlayerCard';
-import { generateBalancedTeams } from './services/teamService';
-import { Star, Share2, Users, Layout, Activity, RotateCcw, Download, Copy, Trash2, ImageIcon, MessageCircle, Pencil, Pin } from 'lucide-react';
+import { generateBalancedTeams, migrateToAdvancedMode } from './services/teamService';
+import { Star, Share2, Users, Layout, Activity, RotateCcw, Download, Copy, Trash2, ImageIcon, MessageCircle, Pencil, Pin, Dumbbell, Zap } from 'lucide-react';
 import { TeamListView } from './components/TeamListView';
 import { CompactTeamHeader } from './components/CompactTeamHeader';
 import { FieldView } from './components/FieldView';
@@ -28,7 +28,9 @@ const App = () => {
   const [players, setPlayers] = useState<Player[]>([]);
   const [name, setName] = useState('');
   const [position, setPosition] = useState<Position>(Position.MID);
-  const [stars, setStars] = useState(3);
+  const [physical, setPhysical] = useState(3);
+  const [skill, setSkill] = useState(3);
+  const [skillMode, setSkillMode] = useState<SkillMode>('basic');
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const [result, setResult] = useState<MatchResult | null>(null);
@@ -69,23 +71,36 @@ const App = () => {
   const handleAddOrUpdatePlayer = () => {
     if (!name.trim()) return;
 
+    const newPlayer: Player = editingId
+      ? {
+          ...players.find(p => p.id === editingId)!,
+          name,
+          position,
+          stars: skill, // backwards compat: stars = skill value
+          physical: skillMode === 'advanced' ? physical : undefined,
+          skill
+        }
+      : {
+          id: crypto.randomUUID(),
+          name,
+          position,
+          stars: skill, // backwards compat: stars = skill value
+          physical: skillMode === 'advanced' ? physical : undefined,
+          skill
+        };
+
     if (editingId) {
-      setPlayers(prev => prev.map(p => p.id === editingId ? { ...p, name, position, stars } : p));
+      setPlayers(prev => prev.map(p => p.id === editingId ? newPlayer : p));
       setEditingId(null);
     } else {
-      const newPlayer: Player = {
-        id: crypto.randomUUID(),
-        name,
-        position,
-        stars
-      };
       setPlayers(prev => [...prev, newPlayer]);
     }
 
     // Reset form
     setName('');
     setPosition(Position.MID);
-    setStars(3);
+    setPhysical(3);
+    setSkill(3);
 
     // Focus back on name input for rapid entry
     nameInputRef.current?.focus();
@@ -103,7 +118,8 @@ const App = () => {
   const handleEdit = (player: Player) => {
     setName(player.name);
     setPosition(player.position);
-    setStars(player.stars);
+    setSkill(player.skill ?? player.stars); // skill || fallback to stars for old data
+    setPhysical(player.physical ?? 3);
     setEditingId(player.id);
   };
 
@@ -125,7 +141,7 @@ const App = () => {
 
       // Clean players coordinates to reset positions on field
       const cleanPlayers = players.map(({ x, y, ...p }) => p);
-      const data = await generateBalancedTeams(cleanPlayers);
+      const data = await generateBalancedTeams(cleanPlayers, skillMode);
       setResult(data);
       toast.success("¡Equipos armados!", {
         style: { border: '2px solid #000', boxShadow: '4px 4px 0px #000', fontWeight: 'bold', background: '#88cc00', color: '#000' }
@@ -154,7 +170,7 @@ const App = () => {
     });
   };
 
-  const handlePlayerUpdate = (updatedPlayer: Player) => {
+const handlePlayerUpdate = (updatedPlayer: Player) => {
     if (!result) return;
 
     // Update in main list
@@ -173,6 +189,16 @@ const App = () => {
         teamB: updateTeam(prev.teamB)
       };
     });
+  };
+
+  // Handle skill mode toggle - migrate existing players to advanced mode
+  const handleSkillModeChange = (newMode: SkillMode) => {
+    if (newMode === 'advanced' && skillMode === 'basic') {
+      // Migrate existing players to advanced mode
+      const migrated = migrateToAdvancedMode(players);
+      setPlayers(migrated);
+    }
+    setSkillMode(newMode);
   };
 
   // Calculate waiting list (players in main list but not in current result teams)
@@ -208,7 +234,6 @@ const App = () => {
       return null;
     }
   };
-
 
   // Helper to allow async awaiting of clipboard write
   const copyCanvasToClipboard = (canvas: HTMLCanvasElement): Promise<void> => {
@@ -310,21 +335,26 @@ const App = () => {
     }
   };
 
-
   // --- Render Helpers ---
 
-  const renderStarsSelector = () => (
-    <div className="flex gap-1 cursor-pointer">
-      {[1, 2, 3, 4, 5].map(val => (
-        <Star
-          key={val}
-          size={32}
-          fill={val <= stars ? "currentColor" : "none"}
-          color="#000"
-          className={`${val <= stars ? 'text-neo-yellow' : 'text-gray-400'} transition-transform hover:scale-110`}
-          onClick={() => setStars(val)}
-        />
-      ))}
+  const renderStarsSelector = (value: number, onChange: (v: number) => void, label: string, icon: React.ReactNode) => (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        {icon}
+        <span className="font-bold text-sm text-black">{label}</span>
+      </div>
+      <div className="flex gap-1 cursor-pointer">
+        {[1, 2, 3, 4, 5].map(val => (
+          <Star
+            key={val}
+            size={24}
+            fill={val <= value ? "currentColor" : "none"}
+            color="#000"
+            className={`${val <= value ? 'text-neo-yellow' : 'text-gray-400'} transition-transform hover:scale-110`}
+            onClick={() => onChange(val)}
+          />
+        ))}
+      </div>
     </div>
   );
 
@@ -434,7 +464,25 @@ const App = () => {
               </div>
 
               <div>
-                <label className="block font-bold mb-1 text-black">Habilidad</label>
+                <label className="block font-bold mb-1 text-black">
+                  {skillMode === 'basic' ? 'Habilidad' : 'Habilidades'}
+                </label>
+                
+                {/* Toggle switch for mode */}
+                <div className="flex items-center gap-2 mb-3 p-2 bg-gray-100 border-2 border-neo-black rounded-lg">
+                  <span className={`text-sm font-bold ${skillMode === 'basic' ? 'text-black' : 'text-gray-400'}`}>Básico</span>
+                  <button
+                    type="button"
+                    onClick={() => handleSkillModeChange(skillMode === 'basic' ? 'advanced' : 'basic')}
+                    className={`relative w-12 h-6 border-2 border-neo-black rounded-full transition-colors ${skillMode === 'advanced' ? 'bg-neo-green' : 'bg-gray-300'}`}
+                  >
+                    <span
+                      className={`absolute top-0 left-0 w-5 h-5 bg-white border-2 border-neo-black rounded-full transition-transform ${skillMode === 'advanced' ? 'translate-x-6' : 'translate-x-0'}`}
+                    />
+                  </button>
+                  <span className={`text-sm font-bold ${skillMode === 'advanced' ? 'text-black' : 'text-gray-400'}`}>Avanzado</span>
+                </div>
+
                 <div
                   ref={starsRef}
                   className="outline-none inline-block focus-visible:bg-gray-100 rounded-lg p-1 transition-all"
@@ -448,16 +496,17 @@ const App = () => {
                     } else if (e.key === 'ArrowUp') {
                       e.preventDefault();
                       positionRef.current?.focus();
-                    } else if (e.key === 'ArrowRight') {
-                      e.preventDefault();
-                      setStars(Math.min(5, stars + 1));
-                    } else if (e.key === 'ArrowLeft') {
-                      e.preventDefault();
-                      setStars(Math.max(1, stars - 1));
                     }
                   }}
                 >
-                  {renderStarsSelector()}
+                  <div className="space-y-3">
+                    {renderStarsSelector(skill, setSkill, 'Habilidad', <Star size={16} className="text-neo-yellow" />)}
+                    {skillMode === 'advanced' && (
+                      <div className="animate-in fade-in slide-in-from-top-2 duration-200">
+                        {renderStarsSelector(physical, setPhysical, 'Físico', <Dumbbell size={16} className="text-neo-red" />)}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

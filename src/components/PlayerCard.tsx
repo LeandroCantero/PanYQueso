@@ -1,6 +1,7 @@
 import React from 'react';
 import { Player, PositionColors, PositionLabels } from '../types';
 import { Trash2, Edit2, Star } from 'lucide-react';
+import { calculatePlayerRating } from '../services/teamService';
 
 interface PlayerCardProps {
   player: Player;
@@ -9,6 +10,8 @@ interface PlayerCardProps {
 }
 
 export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onDelete, onEdit }) => {
+  const rating = calculatePlayerRating(player);
+
   return (
     <div className="flex items-center justify-between bg-white border-4 border-neo-black shadow-neo-sm p-3 mb-3">
       <div className="flex items-center gap-3">
@@ -17,16 +20,17 @@ export const PlayerCard: React.FC<PlayerCardProps> = ({ player, onDelete, onEdit
         </div>
         <div>
           <h3 className="font-bold text-lg leading-none text-neo-black">{player.name}</h3>
-          <div className="flex text-neo-yellow">
-            {Array.from({ length: 5 }).map((_, i) => (
+          <div className="flex items-center gap-0.5 text-neo-yellow">
+            {Array.from({ length: Math.floor(rating) }).map((_, i) => (
               <Star
                 key={i}
                 size={14}
-                fill={i < player.stars ? "currentColor" : "none"}
+                fill="currentColor"
                 color="#000"
-                className={i < player.stars ? "text-neo-yellow" : "text-gray-300"}
+                className="text-neo-yellow"
               />
             ))}
+            <span className="text-xs font-bold text-neo-black ml-0.5">{rating.toFixed(1)}</span>
           </div>
         </div>
       </div>

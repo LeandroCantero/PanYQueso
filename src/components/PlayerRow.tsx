@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Player, PositionColors, PositionLabels } from '../types';
 import { Star, Check, X, Pencil } from 'lucide-react';
+import { calculatePlayerRating } from '../services/teamService';
 
 interface PlayerRowProps {
     player: Player;
@@ -11,6 +12,8 @@ export const PlayerRow: React.FC<PlayerRowProps> = ({ player, onUpdate }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [name, setName] = useState(player.name);
     const [stars, setStars] = useState(player.stars);
+
+    const rating = calculatePlayerRating(player);
 
     const handleSave = () => {
         if (name.trim()) {
@@ -70,10 +73,17 @@ export const PlayerRow: React.FC<PlayerRowProps> = ({ player, onUpdate }) => {
                 {player.name}
             </span>
             <div className="flex items-center gap-2">
-                <div className="flex">
-                    {Array.from({ length: player.stars }).map((_, i) => (
-                        <Star key={i} size={12} fill="currentColor" color="#000" className="text-neo-yellow" />
+                <div className="flex items-center gap-0.5">
+                    {Array.from({ length: Math.floor(rating) }).map((_, i) => (
+                        <Star
+                            key={i}
+                            size={12}
+                            fill="currentColor"
+                            color="#000"
+                            className="text-neo-yellow"
+                        />
                     ))}
+                    <span className="text-[10px] font-bold text-neo-black ml-0.5">{rating.toFixed(1)}</span>
                 </div>
                 <button
                     onClick={() => setIsEditing(true)}

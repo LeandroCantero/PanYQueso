@@ -207,6 +207,8 @@ export const FieldView: React.FC<FieldViewProps> = ({
         id: player.id,
         name: player.name,
         stars: player.stars,
+        physical: player.physical,
+        skill: player.skill,
         position: player.position,
         x: parseFloat((player.currentLeft || player.coords?.left || '0').replace('%', '')),
         y: parseFloat((player.currentTop || player.coords?.top || '0').replace('%', ''))

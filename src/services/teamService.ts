@@ -1,4 +1,34 @@
-import { Player, MatchResult, Position } from "../types";
+import { Player, MatchResult, Position, SkillMode } from "../types";
+
+// Helper para calcular el rating de un jugador (self-contained, no necesita mode)
+// Si tiene physical+skill calcula el promedio, sino usa stars
+export const calculatePlayerRating = (player: Player): number => {
+  if (player.physical !== undefined && player.skill !== undefined) {
+    return (player.physical + player.skill) / 2;
+  }
+  return player.stars;
+};
+
+// Helper para calcular el rating de un jugador según el modo
+export const getPlayerRating = (player: Player, mode: SkillMode): number => {
+  return calculatePlayerRating(player);
+};
+
+// Helper to migrate players from basic to advanced mode
+export const migrateToAdvancedMode = (players: Player[]): Player[] => {
+  return players.map(p => ({
+    ...p,
+    physical: p.physical ?? p.stars,
+    skill: p.skill ?? p.stars
+  }));
+};
+
+// Helper to calculate average from rating (not raw stars)
+export const getAverageFromRating = (players: Player[], mode: SkillMode): number => {
+  if (players.length === 0) return 0;
+  const sum = players.reduce((acc, p) => acc + getPlayerRating(p, mode), 0);
+  return parseFloat((sum / players.length).toFixed(1));
+};
 
 // Fisher-Yates shuffle helper
 const shuffle = <T>(array: T[]): T[] => {
@@ -10,7 +40,7 @@ const shuffle = <T>(array: T[]): T[] => {
     return newArray;
 };
 
-export const generateBalancedTeams = async (players: Player[]): Promise<MatchResult> => {
+export const generateBalancedTeams = async (players: Player[], mode: SkillMode = 'basic'): Promise<MatchResult> => {
     // 1. Group players by position
     // Shuffle first to ensure random order for players with same stars
     const goalkeepers = shuffle(players.filter(p => p.position === Position.GK));
@@ -21,16 +51,16 @@ export const generateBalancedTeams = async (players: Player[]): Promise<MatchRes
     const teamA: Player[] = [];
     const teamB: Player[] = [];
 
-    // Helper to calculate total stars of a team
-    const getTeamStars = (team: Player[]) => team.reduce((acc, p) => acc + p.stars, 0);
+    // Helper to calculate total rating of a team (using mode)
+    const getTeamRating = (team: Player[]) => team.reduce((acc, p) => acc + getPlayerRating(p, mode), 0);
 
     // 2. Initial Distribution (Smart Greedy)
     const allGroups = [goalkeepers, defenders, midfielders, forwards];
 
     allGroups.forEach(group => {
         group.forEach(player => {
-            const starsA = getTeamStars(teamA);
-            const starsB = getTeamStars(teamB);
+            const ratingA = getTeamRating(teamA);
+            const ratingB = getTeamRating(teamB);
             const countA = teamA.length;
             const countB = teamB.length;
 
@@ -39,7 +69,7 @@ export const generateBalancedTeams = async (players: Player[]): Promise<MatchRes
             } else if (countB < countA) {
                 teamB.push(player);
             } else {
-                if (starsA <= starsB) {
+                if (ratingA <= ratingB) {
                     teamA.push(player);
                 } else {
                     teamB.push(player);
@@ -49,14 +79,12 @@ export const generateBalancedTeams = async (players: Player[]): Promise<MatchRes
     });
 
     // 3. Optimization Step (Hill Climbing)
-    // Try to swap players to minimize the difference in total stars
+    // Try to swap players to minimize the difference in total rating
     // while keeping position balance relatively stable.
 
     const calculateCost = (tA: Player[], tB: Player[]) => {
-        const starsDiff = Math.abs(getTeamStars(tA) - getTeamStars(tB));
-        // We could add position penalty here if we wanted to enforce strict position matching,
-        // but for now, we prioritize stars as requested.
-        return starsDiff;
+        const ratingDiff = Math.abs(getTeamRating(tA) - getTeamRating(tB));
+        return ratingDiff;
     };
 
     let currentCost = calculateCost(teamA, teamB);
@@ -75,14 +103,11 @@ export const generateBalancedTeams = async (players: Player[]): Promise<MatchRes
                 const pB = teamB[j];
 
                 // Only swap if they have the same position (to maintain structure)
-                // OR if the user doesn't care about structure (but usually they do).
-                // Let's be flexible: Allow swapping if same position OR if it improves balance significantly.
-                // For "Pan y Queso", usually position matters. Let's stick to same position swaps first.
                 if (pA.position === pB.position) {
                     // Try swap
-                    const newStarsA = getTeamStars(teamA) - pA.stars + pB.stars;
-                    const newStarsB = getTeamStars(teamB) - pB.stars + pA.stars;
-                    const newCost = Math.abs(newStarsA - newStarsB);
+                    const newRatingA = getTeamRating(teamA) - getPlayerRating(pA, mode) + getPlayerRating(pB, mode);
+                    const newRatingB = getTeamRating(teamB) - getPlayerRating(pB, mode) + getPlayerRating(pA, mode);
+                    const newCost = Math.abs(newRatingA - newRatingB);
 
                     if (newCost < currentCost) {
                         // Commit swap
@@ -98,12 +123,8 @@ export const generateBalancedTeams = async (players: Player[]): Promise<MatchRes
         }
     }
 
-    // 4. Calculate stats
-    const getAverage = (team: Player[]) => {
-        if (team.length === 0) return 0;
-        const sum = team.reduce((acc, p) => acc + p.stars, 0);
-        return parseFloat((sum / team.length).toFixed(1));
-    };
+    // 4. Calculate stats using rating helper
+    const getAverage = (team: Player[]) => getAverageFromRating(team, mode);
 
     return {
         teamA: {
@@ -116,6 +137,6 @@ export const generateBalancedTeams = async (players: Player[]): Promise<MatchRes
             players: teamB,
             averageSkill: getAverage(teamB)
         },
-        analysis: "Equipos optimizados para paridad de estrellas."
+        analysis: "Equipos optimizados para paridad de habilidad."
     };
 };
