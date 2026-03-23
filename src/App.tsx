@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Player, Position, MatchResult, PositionColors, Team, PositionLabels, SkillMode } from './types';
 import { Button } from './components/Button';
 import { PlayerCard } from './components/PlayerCard';
-import { generateBalancedTeams, migrateToAdvancedMode } from './services/teamService';
+import { generateBalancedTeams, migrateToAdvancedMode, calculatePlayerRating } from './services/teamService';
 import { Star, Share2, Users, Layout, Activity, RotateCcw, Download, Copy, Trash2, ImageIcon, MessageCircle, Pencil, Pin, Dumbbell, Zap } from 'lucide-react';
 import { TeamListView } from './components/TeamListView';
 import { CompactTeamHeader } from './components/CompactTeamHeader';
@@ -91,6 +91,24 @@ const App = () => {
 
     if (editingId) {
       setPlayers(prev => prev.map(p => p.id === editingId ? newPlayer : p));
+
+      // Also update result teams if they exist
+      setResult(prev => {
+        if (!prev) return null;
+        const updateTeam = (team: Team): Team => {
+          const players = team.players.map(p => p.id === editingId ? newPlayer : p);
+          const avg = players.length > 0
+            ? parseFloat((players.reduce((acc, p) => acc + calculatePlayerRating(p), 0) / players.length).toFixed(1))
+            : 0;
+          return { ...team, players, averageSkill: avg };
+        };
+        return {
+          ...prev,
+          teamA: updateTeam(prev.teamA),
+          teamB: updateTeam(prev.teamB)
+        };
+      });
+
       setEditingId(null);
     } else {
       setPlayers(prev => [...prev, newPlayer]);
@@ -176,13 +194,16 @@ const handlePlayerUpdate = (updatedPlayer: Player) => {
     // Update in main list
     setPlayers(prev => prev.map(p => p.id === updatedPlayer.id ? updatedPlayer : p));
 
-    // Update in result teams
+    // Update in result teams + recalculate averages
     setResult(prev => {
       if (!prev) return null;
-      const updateTeam = (team: Team) => ({
-        ...team,
-        players: team.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p)
-      });
+      const updateTeam = (team: Team): Team => {
+        const players = team.players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p);
+        const avg = players.length > 0
+          ? parseFloat((players.reduce((acc, p) => acc + calculatePlayerRating(p), 0) / players.length).toFixed(1))
+          : 0;
+        return { ...team, players, averageSkill: avg };
+      };
       return {
         ...prev,
         teamA: updateTeam(prev.teamA),
@@ -469,7 +490,7 @@ const handlePlayerUpdate = (updatedPlayer: Player) => {
                 </label>
                 
                 {/* Toggle switch for mode */}
-                <div className="flex items-center gap-2 mb-3 p-2 bg-gray-100 border-2 border-neo-black rounded-lg">
+                <div className="flex items-center gap-2 mb-3 p-2 bg-gray-100 border-2 border-neo-black rounded-lg w-fit">
                   <span className={`text-sm font-bold ${skillMode === 'basic' ? 'text-black' : 'text-gray-400'}`}>Básico</span>
                   <button
                     type="button"
@@ -686,9 +707,9 @@ const handlePlayerUpdate = (updatedPlayer: Player) => {
 
                   {viewMode === 'list' && (
                     <div className="flex flex-col md:flex-row gap-4 mb-2">
-                      <TeamListView team={result.teamA} onUpdate={handlePlayerUpdate} />
+                      <TeamListView team={result.teamA} onEdit={handleEdit} />
                       <div className="flex items-center justify-center font-black text-4xl text-black self-center">VS</div>
-                      <TeamListView team={result.teamB} onUpdate={handlePlayerUpdate} />
+                      <TeamListView team={result.teamB} onEdit={handleEdit} />
                     </div>
                   )}
 
